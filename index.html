@@ -96,6 +96,10 @@ textarea{width:100%;min-height:160px;border:1px solid var(--line);border-radius:
 .cpq button{width:52px;height:52px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:24px}
 .cpq b{font-size:30px;min-width:60px}
 .cpsub{font-size:12px;color:var(--acc)}
+.wbox{margin-top:10px;background:#fff6e5;border:1px solid #f0c36d;color:#6b4b00;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5}
+.wbox b{display:block;font-size:14px}
+.wbox.red{background:#fde8e4;border-color:#e59a8a;color:#8a2a17}
+.wbox button{display:block;margin-top:6px;border:none;border-radius:8px;padding:7px 12px;background:#b5532f;color:#fff;font-size:14px}
 .cnext{display:block;width:100%;margin-top:10px;padding:14px;border:none;border-radius:12px;background:var(--acc);color:#fff;font-size:18px;font-weight:600}
 .cnext[hidden]{display:none}
 .win.paused{border-color:rgba(255,255,255,.35)}
@@ -120,8 +124,13 @@ let mode='single';try{mode=localStorage.getItem('inv-scan-mode')||'single'}catch
 const find=c=>S.items.find(x=>x.code===c&&x.loc===S.loc);
 const here=()=>S.items.filter(x=>x.loc===S.loc);
 const allLocs=()=>{const a=S.locs.slice();S.items.forEach(x=>{if(!a.includes(x.loc))a.push(x.loc)});if(!a.includes(S.loc))a.push(S.loc);return a.filter(l=>l!==''||S.items.some(x=>x.loc==='')||S.loc==='')};
-function persist(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('無法儲存到手機，請盡快匯出 Excel')}}
-function touch(){persist();renderHead()}
+let canSave=true,maybePrivate=false;
+try{localStorage.setItem('inv-t','1');if(localStorage.getItem('inv-t')!=='1')canSave=false;localStorage.removeItem('inv-t')}catch(e){canSave=false}
+try{navigator.storage&&navigator.storage.estimate&&navigator.storage.estimate().then(q=>{if(q&&q.quota&&q.quota<150*1024*1024){maybePrivate=true;renderHead()}}).catch(()=>{})}catch(e){}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S));canSave=true}catch(e){canSave=false;toast('無法儲存到手機，請馬上匯出 Excel')}}
+const BK=30;
+function touch(){S.pend=(S.pend||0)+1;persist();renderHead()}
+function exported(){S.pend=0;S.lastExp=Date.now();persist();renderHead()}
 function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2200)}
 function audio(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume()}catch(e){}}
 function beep(f){try{if(!actx)return;const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f||1800;g.gain.value=.1;o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+.09)}catch(e){}}
@@ -130,6 +139,7 @@ function buzz(){try{navigator.vibrate&&navigator.vibrate(50)}catch(e){}}
 function shell(){
 $('#app').innerHTML=`
 <div class="top"><div class="row"><div class="ttl"><h1>盤點小幫手</h1><div class="sub" id="sub"></div></div><button class="btn" id="more">更多</button></div>
+<div id="warn"></div>
 <button class="locbar" id="loc"><span class="lb">目前櫃位</span><b id="locn"></b><span class="ch">切換</span></button>
 <div class="stats"><div><b id="n1">0</b><span>本櫃條碼種類</span></div><div><b id="n2">0</b><span>本櫃總數量</span></div></div></div>
 <div class="sc" id="sc" hidden><b id="sct">掃描槍模式：直接掃描即可</b><span id="scs">每掃一次自動記錄，同一條碼數量 +1</span><div class="lastc" id="scl"></div></div><input id="si" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -141,6 +151,7 @@ $('#app').innerHTML=`
 <div class="camtop"><button class="cbtn" id="cx">完成</button><span id="cloc"></span><button class="cbtn" id="cmode"></button><button class="cbtn" id="torch" hidden>手電筒</button></div>
 <div class="campanel" id="cp"><div class="cphint" id="cph">把條碼橫放在框內，對準就會自動記錄</div><div class="cpres" id="cpr" hidden><div class="cpcode" id="cpc"></div><div class="cpq"><button data-cq="-1">−</button><b id="cpn"></b><button data-cq="1">+</button></div><div class="cpsub" id="cps"></div></div><button class="cnext" id="cnext" hidden>掃下一個</button></div></div>
 <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div><div class="toast" id="toast"></div>`;
+$('#warn').addEventListener('click',e=>{if(e.target.closest('[data-x]'))exportXlsx()});
 $('#more').onclick=openMenu;$('#xls').onclick=exportXlsx;$('#loc').onclick=openLoc;
 $('#scan').onclick=openCam;
 $('#gun').onclick=()=>setGun(!gun);
@@ -171,7 +182,12 @@ $('#n1').textContent=h.length;
 $('#n2').textContent=rnd(h.reduce((a,x)=>a+(x.qty||0),0));
 $('#locn').textContent=LN(S.loc);$('#loc').classList.toggle('none',!S.loc);
 const nl=new Set(S.items.map(x=>x.loc)).size,tq=rnd(S.items.reduce((a,x)=>a+(x.qty||0),0));
-$('#sub').textContent='全部 '+nl+' 櫃 · '+tq+' 件 · 自動存在這支手機';
+$('#sub').textContent='全部 '+nl+' 櫃 · '+tq+' 件 · '+(S.lastExp?'上次匯出 '+tm(S.lastExp):'尚未匯出過');
+let w='';
+if(!canSave)w+='<div class="wbox red"><b>無法儲存到這支手機！</b>可能是無痕模式或儲存空間已滿。關掉網頁資料就會消失，請馬上匯出 Excel，並改用一般模式開啟。<button data-x>立即匯出</button></div>';
+else if(maybePrivate)w+='<div class="wbox red"><b>你可能正在用無痕模式</b>關掉網頁後資料會全部消失。請改用一般模式開啟這個網址。</div>';
+if(canSave&&S.items.length&&(S.pend||0)>=BK)w+='<div class="wbox"><b>已有 '+S.pend+' 筆變動還沒備份</b>建議現在匯出一次 Excel，萬一資料不見只要重盤一點點。<button data-x>匯出備份</button></div>';
+$('#warn').innerHTML=w;
 }
 
 function itemHTML(x){
@@ -323,11 +339,11 @@ function openLoc(){
 const L=allLocs();
 const stat=l=>{const a=S.items.filter(x=>x.loc===l);return a.length+' 種 · '+rnd(a.reduce((s,x)=>s+(x.qty||0),0))+' 件'};
 open(`<h2>選擇櫃位</h2><p class="hint">之後掃描的條碼都會記在這個櫃位。</p>
-<form class="addloc" id="al"><input id="aln" placeholder="新櫃位名稱，例如 A1、冷藏櫃" autocomplete="off"><button class="btn pri" type="submit">新增並切換</button></form>
+<form class="addloc" id="al"><input id="aln" placeholder="新櫃位名稱，例如 A1、B2" autocomplete="off"><button class="btn pri" type="submit">新增並切換</button></form>
 <div class="locs">${L.map(l=>`<button class="btn${l===S.loc?' cur':''}" data-l="${esc(l)}"><b>${esc(LN(l))}</b><span>${stat(l)}</span></button>`).join('')||'<p class="hint">還沒有櫃位，請在上面新增。</p>'}</div>
 ${S.items.some(x=>x.loc===S.loc)?`<button class="btn dng" id="cl_cur" style="width:100%;margin-top:6px">清空「${esc(LN(S.loc))}」的資料</button>`:''}
 <div class="acts"><button class="btn" id="l_x">關閉</button></div>`);
-const go=l=>{S.loc=l;if(l&&!S.locs.includes(l))S.locs.push(l);last=null;touch();close();renderList();toast('目前櫃位：'+LN(l))};
+const go=l=>{if(l!==S.loc&&(S.pend||0)>0&&S.items.some(x=>x.loc===S.loc))setTimeout(()=>toast('換櫃前建議先匯出一次 Excel 備份'),400);S.loc=l;if(l&&!S.locs.includes(l))S.locs.push(l);last=null;touch();close();renderList();toast('目前櫃位：'+LN(l))};
 $('#al').onsubmit=e=>{e.preventDefault();const v=$('#aln').value.trim();if(!v){$('#aln').focus();return}go(v)};
 $('#sheet').querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>go(b.dataset.l));
 $('#l_x').onclick=close;
@@ -364,16 +380,32 @@ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'各櫃明細'
 return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 function ready(){if(!S.items.length){toast('還沒有任何資料');return false}if(!window.XLSX){toast('Excel 元件載入失敗，請確認網路後重新整理');return false}return true}
+function askName(btn,cb){
+const def=(S.fname||'盤點')+'_'+today();
+open(`<h2>檔名</h2><p class="hint">可以自己改檔名，不用打 .xlsx</p><div class="f"><input id="fn" value="${esc(def)}" autocomplete="off"></div>
+<div class="acts"><button class="btn" id="fn_x">取消</button><button class="btn pri" id="fn_ok">${btn}</button></div>`);
+const inp=$('#fn');setTimeout(()=>{inp.focus();inp.select()},50);
+$('#fn_x').onclick=close;
+const ok=()=>{let n=inp.value.replace(/\.xlsx$/i,'').replace(/[\\/:*?"<>|\r\n]+/g,'_').trim();if(!n)n=def;
+const base=n.replace(/_\d{4}-\d{2}-\d{2}$/,'');if(base)S.fname=base;persist();close();cb(n+'.xlsx')};
+$('#fn_ok').onclick=ok;inp.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();ok()}};
+}
 function exportXlsx(){
 if(!ready())return;
-const blob=buildXlsx();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='inventory_'+today()+'.xlsx';document.body.appendChild(a);a.click();
-setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);toast('已匯出 Excel');
+askName('下載',doExport);
 }
-async function shareXlsx(){
+function doExport(name){
+const blob=buildXlsx();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);exported();toast('已匯出 Excel');
+}
+function shareXlsx(){
 if(!ready())return;
-const f=new File([buildXlsx()],'inventory_'+today()+'.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+askName('分享',doShare);
+}
+async function doShare(name){
+const f=new File([buildXlsx()],name,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 if(!navigator.canShare||!navigator.canShare({files:[f]})){toast('這支手機不支援直接分享，請用「匯出 Excel」');return}
-try{await navigator.share({files:[f],title:'盤點 '+today()});close()}catch(e){}
+try{await navigator.share({files:[f],title:'盤點 '+today()});exported();close()}catch(e){}
 }
 
 shell();renderHead();renderList();
