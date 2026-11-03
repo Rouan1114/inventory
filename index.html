@@ -96,11 +96,21 @@ textarea{width:100%;min-height:160px;border:1px solid var(--line);border-radius:
 .cpq button{width:52px;height:52px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:24px}
 .cpq b{font-size:30px;min-width:60px}
 .cpsub{font-size:12px;color:var(--acc)}
+.undo{display:flex;align-items:center;gap:8px;margin:10px 16px 0;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--mute)}
+.undo[hidden]{display:none}
+.undo span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Menlo,monospace}
+.undo button{border:1px solid var(--warn);color:var(--warn);background:#fff;border-radius:8px;padding:6px 14px;font-size:14px}
+.locs .lrow{display:flex;gap:6px}
+.locs .lrow .btn[data-l]{flex:1}
+.locs .lrow .ed{width:auto;flex:none;font-size:13px}
 .wbox{margin-top:10px;background:#fff6e5;border:1px solid #f0c36d;color:#6b4b00;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5}
 .wbox b{display:block;font-size:14px}
 .wbox.red{background:#fde8e4;border-color:#e59a8a;color:#8a2a17}
 .wbox button{display:block;margin-top:6px;border:none;border-radius:8px;padding:7px 12px;background:#b5532f;color:#fff;font-size:14px}
-.cnext{display:block;width:100%;margin-top:10px;padding:14px;border:none;border-radius:12px;background:var(--acc);color:#fff;font-size:18px;font-weight:600}
+.crow{display:flex;gap:8px;margin-top:10px}
+.cundo{flex:none;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);font-size:15px}
+.cundo[hidden]{display:none}
+.cnext{flex:1;display:block;width:100%;padding:14px;border:none;border-radius:12px;background:var(--acc);color:#fff;font-size:18px;font-weight:600}
 .cnext[hidden]{display:none}
 .win.paused{border-color:rgba(255,255,255,.35)}
 .win.paused i{display:none}
@@ -110,7 +120,7 @@ const $=s=>document.querySelector(s);
 const KEY='inv-standalone-v1';
 let S={loc:'',locs:[],items:[]};
 try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.items))S=d}catch(e){}
-S.loc=S.loc||'';S.locs=S.locs||[];S.items.forEach(x=>{if(x.loc==null)x.loc=''});
+S.loc=S.loc||'';S.locs=S.locs||[];S.hist=S.hist||[];S.items.forEach(x=>{if(x.loc==null)x.loc=''});
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 let last=null,scanning=false,gun=false,gunT=null,actx=null;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -143,15 +153,18 @@ $('#app').innerHTML=`
 <button class="locbar" id="loc"><span class="lb">目前櫃位</span><b id="locn"></b><span class="ch">切換</span></button>
 <div class="stats"><div><b id="n1">0</b><span>本櫃條碼種類</span></div><div><b id="n2">0</b><span>本櫃總數量</span></div></div></div>
 <div class="sc" id="sc" hidden><b id="sct">掃描槍模式：直接掃描即可</b><span id="scs">每掃一次自動記錄，同一條碼數量 +1</span><div class="lastc" id="scl"></div></div><input id="si" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false">
+<div class="undo" id="undo" hidden><span id="undot"></span><button id="undob">復原</button></div>
 <form class="manual" id="mf"><input id="mc" placeholder="手動輸入條碼" inputmode="numeric" autocomplete="off"><button class="btn" type="submit">加入</button></form>
 <div class="list" id="list"></div>
 <div class="fab"><div class="in"><button class="btn" id="xls">匯出 Excel</button><button class="btn tg" id="gun">掃描槍</button><button class="btn pri big" id="scan">相機掃描</button></div></div>
-<input type="file" id="cam" accept="image/*" capture="environment" hidden>
+<input type="file" id="cam" accept="image/*" capture="environment" hidden><input type="file" id="imp" accept=".xlsx,.xls,.csv" hidden>
 <div class="camv" id="camv"><video id="vid" playsinline muted autoplay></video><div class="mask"><div class="win" id="win"><i></i></div></div>
 <div class="camtop"><button class="cbtn" id="cx">完成</button><span id="cloc"></span><button class="cbtn" id="cmode"></button><button class="cbtn" id="torch" hidden>手電筒</button></div>
-<div class="campanel" id="cp"><div class="cphint" id="cph">把條碼橫放在框內，對準就會自動記錄</div><div class="cpres" id="cpr" hidden><div class="cpcode" id="cpc"></div><div class="cpq"><button data-cq="-1">−</button><b id="cpn"></b><button data-cq="1">+</button></div><div class="cpsub" id="cps"></div></div><button class="cnext" id="cnext" hidden>掃下一個</button></div></div>
+<div class="campanel" id="cp"><div class="cphint" id="cph">把條碼橫放在框內，對準就會自動記錄</div><div class="cpres" id="cpr" hidden><div class="cpcode" id="cpc"></div><div class="cpq"><button data-cq="-1">−</button><b id="cpn"></b><button data-cq="1">+</button></div><div class="cpsub" id="cps"></div></div><div class="crow"><button class="cundo" id="cundo" hidden>復原這筆</button><button class="cnext" id="cnext" hidden>掃下一個</button></div></div></div>
 <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div><div class="toast" id="toast"></div>`;
 $('#warn').addEventListener('click',e=>{if(e.target.closest('[data-x]'))exportXlsx()});
+$('#undob').onclick=()=>{undo();if(gun)focusGun()};
+$('#imp').onchange=onImport;
 $('#more').onclick=openMenu;$('#xls').onclick=exportXlsx;$('#loc').onclick=openLoc;
 $('#scan').onclick=openCam;
 $('#gun').onclick=()=>setGun(!gun);
@@ -171,6 +184,7 @@ $('#cx').onclick=closeCam;
 $('#torch').onclick=toggleTorch;
 $('#cmode').onclick=()=>{mode=mode==='single'?'cont':'single';try{localStorage.setItem('inv-scan-mode',mode)}catch(e){}armed=true;lastCode='';drawMode();toast(mode==='single'?'單次模式：每掃一個要按「掃下一個」':'連續模式：對準就自動記錄')};
 $('#cnext').onclick=()=>{armed=true;lastCode='';drawMode()};
+$('#cundo').onclick=()=>{const h=undo();if(!h)return;$('#cundo').hidden=true;lastCode=h.code;lastAt=Date.now();lastAny=Date.now();const x=S.items.find(y=>y.loc===h.loc&&y.code===h.code);if(mode==='single'){armed=false;if(x){camItem=x;showCamItem(x,false)}else{camItem=null;$('#cpr').hidden=true;$('#cph').hidden=false;$('#cph').textContent='已復原，按「掃下一個」繼續'}$('#cps').textContent='已復原這筆'}else{camItem=null;$('#cpr').hidden=true;$('#cph').hidden=false}drawMode()};
 $('#vid').addEventListener('click',()=>{if(!armed){armed=true;lastCode='';drawMode()}});
 $('#cp').addEventListener('click',e=>{const b=e.target.closest('[data-cq]');if(!b||!camItem)return;camItem.qty=Math.max(0,rnd((camItem.qty||0)+(+b.dataset.cq)));touch();renderList();showCamItem(camItem,false)});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)closeCam()});
@@ -182,6 +196,8 @@ $('#n1').textContent=h.length;
 $('#n2').textContent=rnd(h.reduce((a,x)=>a+(x.qty||0),0));
 $('#locn').textContent=LN(S.loc);$('#loc').classList.toggle('none',!S.loc);
 const nl=new Set(S.items.map(x=>x.loc)).size,tq=rnd(S.items.reduce((a,x)=>a+(x.qty||0),0));
+const lh=S.hist[S.hist.length-1];
+$('#undo').hidden=!lh;if(lh)$('#undot').textContent='上一筆：['+LN(lh.loc)+'] '+lh.code+' +1';
 $('#sub').textContent='全部 '+nl+' 櫃 · '+tq+' 件 · '+(S.lastExp?'上次匯出 '+tm(S.lastExp):'尚未匯出過');
 let w='';
 if(!canSave)w+='<div class="wbox red"><b>無法儲存到這支手機！</b>可能是無痕模式或儲存空間已滿。關掉網頁資料就會消失，請馬上匯出 Excel，並改用一般模式開啟。<button data-x>立即匯出</button></div>';
@@ -203,8 +219,17 @@ $('#list').innerHTML=v.length?v.map(itemHTML).join(''):`<div class="empty">${S.l
 function add(c){
 let x=find(c);const isNew=!x;
 if(isNew){x={code:c,loc:S.loc,qty:0};S.items.push(x)}
-x.qty=rnd((x.qty||0)+1);x.t=Date.now();x._new=isNew;last=c;touch();renderList();
+x.qty=rnd((x.qty||0)+1);x.t=Date.now();x._new=isNew;last=c;
+S.hist.push({loc:S.loc,code:c,n:isNew?1:0});if(S.hist.length>100)S.hist.shift();
+touch();renderList();
 return x;
+}
+function undo(){
+const h=S.hist.pop();if(!h){toast('沒有可以復原的掃描');return null}
+const x=S.items.find(y=>y.loc===h.loc&&y.code===h.code);
+if(x){x.qty=Math.max(0,rnd((x.qty||0)-1));if(h.n&&x.qty<=0)S.items=S.items.filter(y=>y!==x)}
+last=null;touch();renderList();toast('已復原：['+LN(h.loc)+'] '+h.code+' −1');
+return h;
 }
 
 function setGun(on){
@@ -283,7 +308,7 @@ if(mode==='single')armed=false;
 const x=add(c);camItem=x;
 beep(x._new?1500:1900);buzz();
 const w=$('#win');w.classList.remove('hit');void w.offsetWidth;w.classList.add('hit');
-showCamItem(x,true);drawMode();
+showCamItem(x,true);$('#cundo').hidden=false;drawMode();
 }
 function showCamItem(x,fresh){
 $('#cph').hidden=true;$('#cpr').hidden=false;
@@ -340,29 +365,87 @@ const L=allLocs();
 const stat=l=>{const a=S.items.filter(x=>x.loc===l);return a.length+' 種 · '+rnd(a.reduce((s,x)=>s+(x.qty||0),0))+' 件'};
 open(`<h2>選擇櫃位</h2><p class="hint">之後掃描的條碼都會記在這個櫃位。</p>
 <form class="addloc" id="al"><input id="aln" placeholder="新櫃位名稱，例如 A1、B2" autocomplete="off"><button class="btn pri" type="submit">新增並切換</button></form>
-<div class="locs">${L.map(l=>`<button class="btn${l===S.loc?' cur':''}" data-l="${esc(l)}"><b>${esc(LN(l))}</b><span>${stat(l)}</span></button>`).join('')||'<p class="hint">還沒有櫃位，請在上面新增。</p>'}</div>
+<div class="locs">${L.map(l=>`<div class="lrow"><button class="btn${l===S.loc?' cur':''}" data-l="${esc(l)}"><b>${esc(LN(l))}</b><span>${stat(l)}</span></button><button class="btn ed" data-e="${esc(l)}">編輯</button></div>`).join('')||'<p class="hint">還沒有櫃位，請在上面新增。</p>'}</div>
 ${S.items.some(x=>x.loc===S.loc)?`<button class="btn dng" id="cl_cur" style="width:100%;margin-top:6px">清空「${esc(LN(S.loc))}」的資料</button>`:''}
 <div class="acts"><button class="btn" id="l_x">關閉</button></div>`);
 const go=l=>{if(l!==S.loc&&(S.pend||0)>0&&S.items.some(x=>x.loc===S.loc))setTimeout(()=>toast('換櫃前建議先匯出一次 Excel 備份'),400);S.loc=l;if(l&&!S.locs.includes(l))S.locs.push(l);last=null;touch();close();renderList();toast('目前櫃位：'+LN(l))};
 $('#al').onsubmit=e=>{e.preventDefault();const v=$('#aln').value.trim();if(!v){$('#aln').focus();return}go(v)};
 $('#sheet').querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>go(b.dataset.l));
+$('#sheet').querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>editLoc(b.dataset.e));
 $('#l_x').onclick=close;
 const cc=$('#cl_cur');if(cc){let armed=false;cc.onclick=()=>{if(!armed){armed=true;cc.textContent='再按一次確定清空（無法復原）';return}S.items=S.items.filter(x=>x.loc!==S.loc);touch();close();renderList();toast('已清空')}}
-if(!L.length||!S.loc)setTimeout(()=>$('#aln').focus(),50);
+if(!L.length||!S.loc)setTimeout(()=>{const i=$('#aln');if(i)i.focus()},50);
+}
+
+function editLoc(l){
+const n=S.items.filter(x=>x.loc===l).length;
+open(`<h2>編輯櫃位</h2><div class="f"><input id="ln" value="${esc(l)}" placeholder="櫃位名稱" autocomplete="off"></div>
+<p class="hint">改成已經存在的櫃位名稱，會把兩櫃合併，相同條碼數量相加。</p>
+<div class="acts"><button class="btn" id="le_x">返回</button><button class="btn pri" id="le_ok">儲存名稱</button></div>
+<button class="btn dng" id="le_del" style="width:100%;margin-top:10px;padding:12px">刪除這個櫃位${n?'（含 '+n+' 筆資料）':''}</button>`);
+$('#le_x').onclick=openLoc;
+$('#le_ok').onclick=()=>{
+const v=$('#ln').value.trim();if(v===l){openLoc();return}
+S.items.filter(x=>x.loc===l).forEach(x=>{const t=S.items.find(y=>y!==x&&y.loc===v&&y.code===x.code);if(t){t.qty=rnd((t.qty||0)+(x.qty||0));t.t=Math.max(t.t||0,x.t||0);S.items=S.items.filter(y=>y!==x)}else x.loc=v});
+S.locs=S.locs.map(y=>y===l?v:y).filter((y,i,a)=>y&&a.indexOf(y)===i);
+S.hist.forEach(h=>{if(h.loc===l)h.loc=v});
+if(S.loc===l)S.loc=v;
+touch();renderList();openLoc();toast('已改名為 '+LN(v));
+};
+let armed=false;$('#le_del').onclick=()=>{if(!armed){armed=true;$('#le_del').textContent='再按一次確定刪除（無法復原）';return}
+S.items=S.items.filter(x=>x.loc!==l);S.locs=S.locs.filter(y=>y!==l);S.hist=S.hist.filter(h=>h.loc!==l);if(S.loc===l)S.loc='';
+touch();renderList();openLoc();toast('已刪除櫃位');};
+}
+
+function onImport(e){
+const f=e.target.files[0];e.target.value='';if(!f)return;
+if(!window.XLSX){toast('Excel 元件載入失敗，請確認網路後重新整理');return}
+const r=new FileReader();
+r.onload=()=>{
+let rows;
+try{const wb=XLSX.read(new Uint8Array(r.result),{type:'array'});const sn=wb.SheetNames.includes('各櫃明細')?'各櫃明細':wb.SheetNames[0];rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,raw:true,defval:''})}
+catch(err){toast('讀不懂這個檔案');return}
+const cell=v=>typeof v==='number'?String(Math.round(v)):String(v==null?'':v).trim();
+let hi=rows.findIndex(r=>r.some(v=>cell(v)==='條碼'));
+let cL=-1,cC=0,cQ=1;
+if(hi>=0){const h=rows[hi].map(cell);cL=h.indexOf('櫃位');cC=h.indexOf('條碼');cQ=h.findIndex(v=>v==='數量'||v==='總數量')}
+else{hi=-1;const w=Math.max(...rows.map(r=>r.length));if(w>=3){cL=0;cC=1;cQ=2}}
+const data=[];
+rows.slice(hi+1).forEach(r=>{const c=cell(r[cC]);if(!okCode(c))return;let loc=cL>=0?cell(r[cL]):'';if(loc==='未指定')loc='';const q=cQ>=0?parseFloat(cell(r[cQ]).replace(/,/g,'')):1;data.push({loc,code:c,qty:isFinite(q)?q:1})});
+if(!data.length){toast('檔案裡找不到條碼資料');return}
+const nl=new Set(data.map(d=>d.loc)).size,tq=rnd(data.reduce((a,d)=>a+d.qty,0));
+open(`<h2>匯入 Excel</h2><p class="hint">讀到 <b>${data.length}</b> 筆、${nl} 個櫃位、共 ${tq} 件。</p><div class="menu">
+<button class="btn" id="im_a">加到目前資料<small>同櫃位、同條碼的數量會相加，適合合併別人的盤點</small></button>
+<button class="btn" id="im_r">取代目前全部資料<small>適合還原備份、換手機後接續盤點</small></button>
+<button class="btn" id="im_x">取消</button></div>`);
+$('#im_x').onclick=close;
+const apply=rep=>{
+if(rep){S.items=[];S.hist=[];S.locs=[]}
+const now=Date.now();
+data.forEach(d=>{const t=S.items.find(y=>y.loc===d.loc&&y.code===d.code);if(t)t.qty=rnd((t.qty||0)+d.qty);else S.items.push({loc:d.loc,code:d.code,qty:rnd(d.qty),t:now});if(d.loc&&!S.locs.includes(d.loc))S.locs.push(d.loc)});
+if(S.items.length&&!S.items.some(x=>x.loc===S.loc))S.loc=S.items[0].loc;
+touch();if(rep)S.pend=0,persist();renderHead();renderList();close();toast('已匯入 '+data.length+' 筆');
+};
+$('#im_a').onclick=()=>apply(false);
+$('#im_r').onclick=()=>{const b=$('#im_r');if(!b.dataset.c&&S.items.length){b.dataset.c=1;b.firstChild.textContent='再按一次確定取代（目前資料會被覆蓋）';return}apply(true)};
+};
+r.readAsArrayBuffer(f);
 }
 
 function openMenu(){
 open(`<h2>更多</h2><div class="menu" style="margin-top:10px">
 ${navigator.canShare?'<button class="btn" id="m_s">分享 Excel 檔<small>直接傳到 LINE、Email、雲端硬碟</small></button>':''}
+<button class="btn" id="m_i">匯入 Excel<small>還原備份、換手機接續，或合併別人的盤點</small></button>
 <button class="btn" id="m_c">複製結果文字<small>櫃位、條碼、數量，可貼到 Excel 或 LINE</small></button>
 <button class="btn dng" id="m_clr">清空全部，開始新的盤點</button>
 <button class="btn" id="m_x">關閉</button></div>`);
 $('#m_x').onclick=close;
 const ms=$('#m_s');if(ms)ms.onclick=shareXlsx;
+$('#m_i').onclick=()=>{close();$('#imp').click()};
 $('#m_c').onclick=()=>{const t='櫃位\t條碼\t數量\n'+sorted().map(x=>LN(x.loc)+'\t'+x.code+'\t'+rnd(x.qty)).join('\n');
 open(`<h2>結果文字</h2><textarea readonly>${esc(t)}</textarea><div class="acts"><button class="btn" id="c_x">關閉</button><button class="btn pri" id="c_c">複製</button></div>`);
 $('#c_x').onclick=close;$('#c_c').onclick=async()=>{try{await navigator.clipboard.writeText(t);toast('已複製')}catch(e){toast('請長按文字框手動複製')}}};
-let armed=false;$('#m_clr').onclick=()=>{if(!armed){armed=true;$('#m_clr').textContent='再按一次確定清空（無法復原）';return}S.items=[];S.locs=[];S.loc='';last=null;touch();close();renderList();toast('已清空')};
+let armed=false;$('#m_clr').onclick=()=>{if(!armed){armed=true;$('#m_clr').textContent='再按一次確定清空（無法復原）';return}S.items=[];S.locs=[];S.hist=[];S.loc='';last=null;touch();close();renderList();toast('已清空')};
 }
 
 function sorted(){const L=allLocs();return S.items.slice().sort((a,b)=>(L.indexOf(a.loc)-L.indexOf(b.loc))||((a.t||0)-(b.t||0)))}
