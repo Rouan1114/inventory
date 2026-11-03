@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f6f4ef"><meta name="apple-mobile-web-app-capable" content="yes"><title>盤點小幫手</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<style>
+:root{--bg:#f6f4ef;--card:#fff;--ink:#22201c;--mute:#7a756c;--line:#e6e1d6;--acc:#2f6f5e;--acc2:#e8f1ee;--warn:#b5532f}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;-webkit-text-size-adjust:100%}
+button,input{font:inherit;color:inherit}
+#app{max-width:640px;margin:0 auto;padding-bottom:110px}
+.top{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 16px 12px;border-bottom:1px solid var(--line)}
+.row{display:flex;align-items:center;gap:8px}
+.ttl{flex:1;min-width:0}
+.ttl h1{font-size:19px;margin:0}
+.ttl .sub{font-size:12px;color:var(--mute);margin-top:2px}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 12px;font-size:14px;cursor:pointer}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.pri:disabled{background:var(--acc2);border-color:var(--acc2);color:var(--acc)}
+.btn.dng{color:var(--warn);border-color:#ebc9bb}
+.stats{display:flex;gap:10px;margin-top:12px}
+.stats div{flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.stats b{display:block;font-size:22px}
+.stats span{font-size:12px;color:var(--mute)}
+.manual[hidden]{display:none}
+.manual{display:flex;gap:8px;padding:12px 16px 4px}
+.manual input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:16px}
+.list{padding:8px 16px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.item.hl{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc2)}
+.bc{flex:1;min-width:0;font-family:ui-monospace,Menlo,monospace;font-size:16px;overflow-wrap:anywhere;cursor:pointer}
+.bc small{display:block;font-family:inherit;font-size:11px;color:var(--mute);margin-top:2px}
+.ctl{display:flex;align-items:center;gap:4px}
+.ctl button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);font-size:20px;cursor:pointer;touch-action:manipulation}
+.ctl input{width:64px;height:40px;text-align:center;border:1px solid var(--line);border-radius:10px;font-size:18px;font-weight:600;background:#fff}
+.empty{text-align:center;color:var(--mute);padding:40px 10px;font-size:14px;line-height:1.7}
+.fab{position:fixed;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(transparent,var(--bg) 30%);z-index:4}
+.fab .in{max-width:608px;margin:0 auto;display:flex;gap:8px}
+.fab .btn{padding:16px;font-size:16px}
+.fab .big{flex:1;font-size:18px;font-weight:600}
+.ov{position:fixed;inset:0;background:rgba(20,18,15,.4);z-index:10;display:none;align-items:flex-end;justify-content:center}
+.ov.show{display:flex}
+.sheet{background:var(--card);width:100%;max-width:640px;max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 16px 22px}
+.sheet h2{font-size:17px;margin:0 0 6px}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:22px;text-align:center;margin:8px 0 4px;overflow-wrap:anywhere}
+.tag{text-align:center;font-size:13px;color:var(--acc);margin-bottom:12px}
+.qty{display:flex;justify-content:center;align-items:center;gap:10px}
+.qty button{width:60px;height:60px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:26px;cursor:pointer}
+.qty input{width:120px;height:60px;text-align:center;border:1px solid var(--line);border-radius:12px;font-size:28px;font-weight:600}
+.acts{display:flex;gap:8px;margin-top:16px}
+.acts .btn{flex:1;padding:13px}
+.menu .btn{display:block;width:100%;text-align:left;margin-bottom:8px;padding:13px 14px}
+.menu .btn small{display:block;color:var(--mute);font-size:12px;margin-top:2px}
+.hint{font-size:13px;color:var(--mute);line-height:1.6}
+.f input{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:10px;font-size:16px;margin:6px 0 4px}
+textarea{width:100%;min-height:160px;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+.sc{margin:12px 16px 4px;border:2px dashed var(--line);border-radius:14px;padding:14px;text-align:center;background:var(--card);cursor:pointer}
+.sc.on{border-style:solid;border-color:var(--acc);background:var(--acc2)}
+.sc.flash{animation:fl .35s}
+@keyframes fl{0%{background:#cfe6dd}100%{background:var(--acc2)}}
+.sc b{display:block;font-size:16px}
+.sc span{display:block;font-size:12px;color:var(--mute);margin-top:4px}
+.sc .lastc{font-family:ui-monospace,Menlo,monospace;font-size:20px;color:var(--acc);margin-top:6px;min-height:26px}
+#si{position:absolute;opacity:0;width:1px;height:1px;left:-9999px}
+.btn.tg.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.locbar{display:flex;align-items:center;gap:10px;width:100%;margin-top:12px;padding:12px 14px;border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:12px;cursor:pointer;text-align:left}
+.locbar .lb{font-size:12px;opacity:.7}
+.locbar b{flex:1;font-size:20px}
+.locbar.none{background:var(--card);color:var(--warn);border-color:var(--warn)}
+.locbar .ch{font-size:13px;border:1px solid rgba(255,255,255,.4);border-radius:8px;padding:4px 10px}
+.locbar.none .ch{border-color:var(--warn)}
+.locs .btn{display:flex;align-items:center;width:100%;margin-bottom:8px;padding:12px 14px;text-align:left}
+.locs .btn b{flex:1;font-size:16px}
+.locs .btn span{font-size:12px;color:var(--mute)}
+.locs .btn.cur{border-color:var(--acc);background:var(--acc2)}
+.addloc{display:flex;gap:8px;margin:6px 0 14px}
+.addloc input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:16px}
+.toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+
+.camv{position:fixed;inset:0;background:#000;z-index:30;display:none}
+.camv.show{display:block}
+.camv video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.mask{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.win{width:86%;max-width:520px;aspect-ratio:2.2/1;border-radius:14px;box-shadow:0 0 0 9999px rgba(0,0,0,.45);border:3px solid rgba(255,255,255,.9);position:relative;overflow:hidden}
+.win i{position:absolute;left:6%;right:6%;top:50%;height:2px;background:#ff5a3c;box-shadow:0 0 8px #ff5a3c}
+.win.hit{animation:hit .45s}
+@keyframes hit{0%{border-color:#4ade80;box-shadow:0 0 0 9999px rgba(20,90,50,.55)}100%{border-color:rgba(255,255,255,.9);box-shadow:0 0 0 9999px rgba(0,0,0,.45)}}
+.camtop{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 12px) 14px 12px;color:#fff;font-size:15px}
+.camtop span{flex:1;text-align:center;font-weight:600}
+.cbtn{background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:9px 14px;font-size:15px}
+.cbtn.on{background:#fff;color:#000}
+.campanel{position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 16px);background:rgba(255,255,255,.96);border-radius:16px;padding:14px;text-align:center;max-width:560px;margin:0 auto}
+.cphint{font-size:15px;color:var(--mute);padding:8px 0}
+.cpcode{font-family:ui-monospace,Menlo,monospace;font-size:22px;overflow-wrap:anywhere}
+.cpq{display:flex;align-items:center;justify-content:center;gap:16px;margin:8px 0 4px}
+.cpq button{width:52px;height:52px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:24px}
+.cpq b{font-size:30px;min-width:60px}
+.cpsub{font-size:12px;color:var(--acc)}
+</style></head><body><div id="app"></div><script>
+(function(){
+const $=s=>document.querySelector(s);
+const KEY='inv-standalone-v1';
+let S={loc:'',locs:[],items:[]};
+try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.items))S=d}catch(e){}
+S.loc=S.loc||'';S.locs=S.locs||[];S.items.forEach(x=>{if(x.loc==null)x.loc=''});
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+let last=null,scanning=false,gun=false,gunT=null,actx=null;
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rnd=n=>Math.round(n*1000)/1000;
+const num=v=>{if(v===''||v==null)return null;const n=parseFloat(String(v).replace(/,/g,''));return isFinite(n)?n:null};
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const tm=t=>{const d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')};
+const LN=l=>l||'未指定';
+const find=c=>S.items.find(x=>x.code===c&&x.loc===S.loc);
+const here=()=>S.items.filter(x=>x.loc===S.loc);
+const allLocs=()=>{const a=S.locs.slice();S.items.forEach(x=>{if(!a.includes(x.loc))a.push(x.loc)});if(!a.includes(S.loc))a.push(S.loc);return a.filter(l=>l!==''||S.items.some(x=>x.loc==='')||S.loc==='')};
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('無法儲存到手機，請盡快匯出 Excel')}}
+function touch(){persist();renderHead()}
+function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),2200)}
+function audio(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume()}catch(e){}}
+function beep(f){try{if(!actx)return;const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f||1800;g.gain.value=.1;o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+.09)}catch(e){}}
+function buzz(){try{navigator.vibrate&&navigator.vibrate(50)}catch(e){}}
+
+function shell(){
+$('#app').innerHTML=`
+<div class="top"><div class="row"><div class="ttl"><h1>盤點小幫手</h1><div class="sub" id="sub"></div></div><button class="btn" id="more">更多</button></div>
+<button class="locbar" id="loc"><span class="lb">目前櫃位</span><b id="locn"></b><span class="ch">切換</span></button>
+<div class="stats"><div><b id="n1">0</b><span>本櫃條碼種類</span></div><div><b id="n2">0</b><span>本櫃總數量</span></div></div></div>
+<div class="sc" id="sc" hidden><b id="sct">掃描槍模式：直接掃描即可</b><span id="scs">每掃一次自動記錄，同一條碼數量 +1</span><div class="lastc" id="scl"></div></div><input id="si" inputmode="none" autocomplete="off" autocapitalize="off" spellcheck="false">
+<form class="manual" id="mf"><input id="mc" placeholder="手動輸入條碼" inputmode="numeric" autocomplete="off"><button class="btn" type="submit">加入</button></form>
+<div class="list" id="list"></div>
+<div class="fab"><div class="in"><button class="btn" id="xls">匯出 Excel</button><button class="btn tg" id="gun">掃描槍</button><button class="btn pri big" id="scan">相機掃描</button></div></div>
+<input type="file" id="cam" accept="image/*" capture="environment" hidden>
+<div class="camv" id="camv"><video id="vid" playsinline muted autoplay></video><div class="mask"><div class="win" id="win"><i></i></div></div>
+<div class="camtop"><button class="cbtn" id="cx">完成</button><span id="cloc"></span><button class="cbtn" id="torch" hidden>手電筒</button></div>
+<div class="campanel" id="cp"><div class="cphint" id="cph">把條碼橫放在框內，對準就會自動記錄</div><div class="cpres" id="cpr" hidden><div class="cpcode" id="cpc"></div><div class="cpq"><button data-cq="-1">−</button><b id="cpn"></b><button data-cq="1">+</button></div><div class="cpsub" id="cps"></div></div></div></div>
+<div class="ov" id="ov"><div class="sheet" id="sheet"></div></div><div class="toast" id="toast"></div>`;
+$('#more').onclick=openMenu;$('#xls').onclick=exportXlsx;$('#loc').onclick=openLoc;
+$('#scan').onclick=openCam;
+$('#gun').onclick=()=>setGun(!gun);
+$('#sc').onclick=()=>focusGun();
+$('#cam').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f||scanning)return;scanning=true;toast('辨識中…');const c=await decodeImage(f);scanning=false;$('#toast').classList.remove('show');if(c){add(c);beep();toast('['+LN(S.loc)+'] '+c+' 已記錄')}else toast('看不到條碼，請再拍一次')};
+const si=$('#si');
+si.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='Tab'){e.preventDefault();commitGun()}});
+si.addEventListener('input',()=>{clearTimeout(gunT);gunT=setTimeout(commitGun,300)});
+si.addEventListener('focus',()=>gunState(true));
+si.addEventListener('blur',()=>gunState(false));
+$('#mf').onsubmit=e=>{e.preventDefault();const c=$('#mc').value.trim();if(!c)return;$('#mc').value='';const x=add(c);toast(c+' 數量 '+x.qty)};
+$('#ov').addEventListener('click',e=>{if(e.target.id==='ov')close()});
+$('#list').addEventListener('click',onListClick);
+$('#list').addEventListener('input',onListInput);
+$('#list').addEventListener('focusin',e=>{if(e.target.dataset.act==='in')e.target.select()});
+$('#cx').onclick=closeCam;
+$('#torch').onclick=toggleTorch;
+$('#cp').addEventListener('click',e=>{const b=e.target.closest('[data-cq]');if(!b||!camItem)return;camItem.qty=Math.max(0,rnd((camItem.qty||0)+(+b.dataset.cq)));touch();renderList();showCamItem(camItem,false)});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)closeCam()});
+}
+
+function renderHead(){
+const h=here();
+$('#n1').textContent=h.length;
+$('#n2').textContent=rnd(h.reduce((a,x)=>a+(x.qty||0),0));
+$('#locn').textContent=LN(S.loc);$('#loc').classList.toggle('none',!S.loc);
+const nl=new Set(S.items.map(x=>x.loc)).size,tq=rnd(S.items.reduce((a,x)=>a+(x.qty||0),0));
+$('#sub').textContent='全部 '+nl+' 櫃 · '+tq+' 件 · 自動存在這支手機';
+}
+
+function itemHTML(x){
+return `<div class="item${x.code===last?' hl':''}" data-c="${esc(x.code)}"><div class="bc" data-act="open">${esc(x.code)}<small>最後掃描 ${tm(x.t||Date.now())}</small></div>
+<div class="ctl"><button data-act="dec" aria-label="減一">−</button><input data-act="in" inputmode="decimal" value="${rnd(x.qty)}"><button data-act="inc" aria-label="加一">+</button></div></div>`;
+}
+
+function renderList(){
+const v=here().sort((a,b)=>(b.t||0)-(a.t||0));
+$('#list').innerHTML=v.length?v.map(itemHTML).join(''):`<div class="empty">${S.loc?'「'+esc(S.loc)+'」還沒有資料':'請先點上方「切換」設定目前櫃位'}<br>按「相機掃描」對準條碼就會自動記錄<br>同一個條碼再掃一次，數量會 +1</div>`;
+}
+
+function add(c){
+let x=find(c);const isNew=!x;
+if(isNew){x={code:c,loc:S.loc,qty:0};S.items.push(x)}
+x.qty=rnd((x.qty||0)+1);x.t=Date.now();x._new=isNew;last=c;touch();renderList();
+return x;
+}
+
+function setGun(on){
+gun=on;$('#gun').classList.toggle('on',on);$('#sc').hidden=!on;$('#mf').hidden=on;
+if(on){audio();focusGun()}else $('#si').blur();
+}
+function focusGun(){const i=$('#si');i.value='';i.focus({preventScroll:true})}
+function gunState(f){if(!gun)return;$('#sc').classList.toggle('on',f);$('#sct').textContent=f?'掃描槍模式：直接掃描即可':'已暫停，點這裡繼續掃描';$('#scs').textContent=f?'每掃一次自動記錄，同一條碼數量 +1':'點了其他地方會暫停接收掃描'}
+function commitGun(){
+clearTimeout(gunT);const i=$('#si');const c=i.value.replace(/[\r\n\t]/g,'').trim();i.value='';if(!c)return;
+const x=add(c);
+$('#scl').textContent='['+LN(S.loc)+'] '+c+'　'+(x._new?'新增 ':'')+'數量 '+x.qty;
+const sc=$('#sc');sc.classList.remove('flash');void sc.offsetWidth;sc.classList.add('flash');
+beep();buzz();
+}
+
+let stream=null,det=null,zr=null,camItem=null,lastCode='',lastAt=0,torchOn=false,ticking=false;
+const COOL=1500;
+async function openCam(){
+audio();
+if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$('#cam').click();return}
+$('#camv').classList.add('show');$('#cloc').textContent='櫃位：'+LN(S.loc);
+$('#cpr').hidden=true;$('#cph').hidden=false;$('#cph').textContent='正在開啟相機…';
+try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false})}
+catch(e){closeCam();open(`<h2>無法開啟相機</h2><p class="hint">請在瀏覽器設定中允許這個網站使用相機，然後重新整理頁面。<br>也可以先改用拍照方式掃描。</p><div class="acts"><button class="btn" id="ce_x">關閉</button><button class="btn pri" id="ce_p">拍照掃描</button></div>`);$('#ce_x').onclick=close;$('#ce_p').onclick=()=>{close();$('#cam').click()};return}
+const v=$('#vid');v.srcObject=stream;try{await v.play()}catch(e){}
+const tr=stream.getVideoTracks()[0];
+try{const cap=tr.getCapabilities&&tr.getCapabilities();$('#torch').hidden=!(cap&&cap.torch);if(cap&&cap.focusMode&&cap.focusMode.includes('continuous'))tr.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(()=>{})}catch(e){}
+if(!det&&'BarcodeDetector' in window){try{const f=await BarcodeDetector.getSupportedFormats();if(f&&f.length)det=new BarcodeDetector({formats:f.filter(x=>x!=='unknown')})}catch(e){det=null}}
+if(!det&&!zr&&window.ZXing){const h=new Map();const F=ZXing.BarcodeFormat;h.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_128,F.CODE_39,F.CODE_93,F.ITF,F.CODABAR,F.QR_CODE,F.DATA_MATRIX]);h.set(ZXing.DecodeHintType.TRY_HARDER,true);zr=new ZXing.MultiFormatReader();zr.setHints(h)}
+if(!det&&!zr){$('#cph').textContent='掃描元件載入失敗，請確認網路後重新整理';return}
+$('#cph').textContent='把條碼橫放在框內，對準就會自動記錄';
+lastCode='';lastAt=0;
+if(!ticking){ticking=true;tick()}
+}
+function closeCam(){
+if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+torchOn=false;$('#torch').classList.remove('on');
+$('#vid').srcObject=null;$('#camv').classList.remove('show');camItem=null;
+}
+async function toggleTorch(){if(!stream)return;torchOn=!torchOn;try{await stream.getVideoTracks()[0].applyConstraints({advanced:[{torch:torchOn}]});$('#torch').classList.toggle('on',torchOn)}catch(e){torchOn=false}}
+const cv=document.createElement('canvas');
+async function tick(){
+if(!stream){ticking=false;return}
+const v=$('#vid');
+if(v.readyState>=2&&v.videoWidth){
+const vw=v.videoWidth,vh=v.videoHeight;
+const sw=Math.round(vw*.86),sh=Math.round(Math.min(vh*.42,sw*.6));
+const sx=Math.round((vw-sw)/2),sy=Math.round((vh-sh)/2);
+const k=Math.min(1,1100/sw);
+cv.width=Math.round(sw*k);cv.height=Math.round(sh*k);
+const g=cv.getContext('2d',{willReadFrequently:true});g.drawImage(v,sx,sy,sw,sh,0,0,cv.width,cv.height);
+let code=null;
+try{
+if(det){const r=await det.detect(cv);if(r&&r[0])code=r[0].rawValue}
+else if(zr){const src=new ZXing.HTMLCanvasElementLuminanceSource(cv);const bm=new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(src));code=zr.decodeWithState(bm).getText()}
+}catch(e){}
+if(code)onCamCode(String(code).trim());
+}
+setTimeout(tick,det?90:140);
+}
+function onCamCode(c){
+if(!c)return;
+const now=Date.now();
+if(c===lastCode&&now-lastAt<COOL){lastAt=now;return}
+lastCode=c;lastAt=now;
+const x=add(c);camItem=x;
+beep(x._new?1500:1900);buzz();
+const w=$('#win');w.classList.remove('hit');void w.offsetWidth;w.classList.add('hit');
+showCamItem(x,true);
+}
+function showCamItem(x,fresh){
+$('#cph').hidden=true;$('#cpr').hidden=false;
+$('#cpc').textContent=x.code;$('#cpn').textContent=rnd(x.qty);
+$('#cps').textContent=fresh?((x._new?'新條碼，已加入':'數量 +1')+' · 同一個要再 +1：移開再對準'):'已修改數量';
+}
+
+async function decodeImage(file){
+let bmp;try{bmp=await createImageBitmap(file)}catch(e){return null}
+for(const max of [1600,1000,2400]){
+const k=Math.min(1,max/Math.max(bmp.width,bmp.height));
+const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+if('BarcodeDetector' in window){try{const r=await new BarcodeDetector().detect(c);if(r&&r[0])return r[0].rawValue.trim()}catch(e){}}
+if(window.ZXing){try{const h=new Map();h.set(ZXing.DecodeHintType.TRY_HARDER,true);const rd=new ZXing.MultiFormatReader();rd.setHints(h);const bm=new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(c)));return rd.decodeWithState(bm).getText().trim()}catch(e){}}
+}
+return null;
+}
+
+function onListClick(e){
+const b=e.target.closest('[data-act]');if(!b)return;
+const el=b.closest('.item');const x=find(el.dataset.c);if(!x)return;
+const a=b.dataset.act;
+if(a==='open'){openQty(x);return}
+if(a==='inc')x.qty=rnd((x.qty||0)+1);
+else if(a==='dec')x.qty=Math.max(0,rnd((x.qty||0)-1));
+else return;
+el.querySelector('input').value=x.qty;touch();
+if(gun)focusGun();
+}
+function onListInput(e){
+if(e.target.dataset.act!=='in')return;
+const x=find(e.target.closest('.item').dataset.c);
+x.qty=num(e.target.value)||0;touch();
+}
+function openQty(x){
+open(`<h2>修改數量</h2><div class="code">${esc(x.code)}</div><div class="tag">櫃位 ${esc(LN(x.loc))}</div>
+<div class="qty"><button data-q="-1">−</button><input id="q_in" inputmode="decimal" value="${rnd(x.qty)}"><button data-q="1">+</button></div>
+<div class="acts"><button class="btn dng" id="q_del">刪除</button><button class="btn pri" id="q_ok">完成</button></div>`);
+const inp=$('#q_in');
+const upd=()=>{touch();const el=[...$('#list').querySelectorAll('.item')].find(e=>e.dataset.c===x.code);if(el)el.querySelector('input').value=rnd(x.qty)};
+$('#sheet').querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{x.qty=Math.max(0,rnd((x.qty||0)+(+b.dataset.q)));inp.value=x.qty;upd()});
+inp.oninput=()=>{x.qty=num(inp.value)||0;upd()};
+inp.onfocus=()=>inp.select();
+$('#q_ok').onclick=close;
+let armed=false;$('#q_del').onclick=()=>{if(!armed){armed=true;$('#q_del').textContent='確定刪除？';return}S.items=S.items.filter(y=>y!==x);touch();close();renderList()};
+}
+
+function open(html){$('#sheet').innerHTML=html;$('#ov').classList.add('show')}
+function close(){$('#ov').classList.remove('show');$('#sheet').innerHTML='';if(gun)setTimeout(focusGun,50)}
+
+function openLoc(){
+const L=allLocs();
+const stat=l=>{const a=S.items.filter(x=>x.loc===l);return a.length+' 種 · '+rnd(a.reduce((s,x)=>s+(x.qty||0),0))+' 件'};
+open(`<h2>選擇櫃位</h2><p class="hint">之後掃描的條碼都會記在這個櫃位。</p>
+<form class="addloc" id="al"><input id="aln" placeholder="新櫃位名稱，例如 A1、冷藏櫃" autocomplete="off"><button class="btn pri" type="submit">新增並切換</button></form>
+<div class="locs">${L.map(l=>`<button class="btn${l===S.loc?' cur':''}" data-l="${esc(l)}"><b>${esc(LN(l))}</b><span>${stat(l)}</span></button>`).join('')||'<p class="hint">還沒有櫃位，請在上面新增。</p>'}</div>
+${S.items.some(x=>x.loc===S.loc)?`<button class="btn dng" id="cl_cur" style="width:100%;margin-top:6px">清空「${esc(LN(S.loc))}」的資料</button>`:''}
+<div class="acts"><button class="btn" id="l_x">關閉</button></div>`);
+const go=l=>{S.loc=l;if(l&&!S.locs.includes(l))S.locs.push(l);last=null;touch();close();renderList();toast('目前櫃位：'+LN(l))};
+$('#al').onsubmit=e=>{e.preventDefault();const v=$('#aln').value.trim();if(!v){$('#aln').focus();return}go(v)};
+$('#sheet').querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>go(b.dataset.l));
+$('#l_x').onclick=close;
+const cc=$('#cl_cur');if(cc){let armed=false;cc.onclick=()=>{if(!armed){armed=true;cc.textContent='再按一次確定清空（無法復原）';return}S.items=S.items.filter(x=>x.loc!==S.loc);touch();close();renderList();toast('已清空')}}
+if(!L.length||!S.loc)setTimeout(()=>$('#aln').focus(),50);
+}
+
+function openMenu(){
+open(`<h2>更多</h2><div class="menu" style="margin-top:10px">
+${navigator.canShare?'<button class="btn" id="m_s">分享 Excel 檔<small>直接傳到 LINE、Email、雲端硬碟</small></button>':''}
+<button class="btn" id="m_c">複製結果文字<small>櫃位、條碼、數量，可貼到 Excel 或 LINE</small></button>
+<button class="btn dng" id="m_clr">清空全部，開始新的盤點</button>
+<button class="btn" id="m_x">關閉</button></div>`);
+$('#m_x').onclick=close;
+const ms=$('#m_s');if(ms)ms.onclick=shareXlsx;
+$('#m_c').onclick=()=>{const t='櫃位\t條碼\t數量\n'+sorted().map(x=>LN(x.loc)+'\t'+x.code+'\t'+rnd(x.qty)).join('\n');
+open(`<h2>結果文字</h2><textarea readonly>${esc(t)}</textarea><div class="acts"><button class="btn" id="c_x">關閉</button><button class="btn pri" id="c_c">複製</button></div>`);
+$('#c_x').onclick=close;$('#c_c').onclick=async()=>{try{await navigator.clipboard.writeText(t);toast('已複製')}catch(e){toast('請長按文字框手動複製')}}};
+let armed=false;$('#m_clr').onclick=()=>{if(!armed){armed=true;$('#m_clr').textContent='再按一次確定清空（無法復原）';return}S.items=[];S.locs=[];S.loc='';last=null;touch();close();renderList();toast('已清空')};
+}
+
+function sorted(){const L=allLocs();return S.items.slice().sort((a,b)=>(L.indexOf(a.loc)-L.indexOf(b.loc))||((a.t||0)-(b.t||0)))}
+function buildXlsx(){
+const rows=sorted().map(x=>[LN(x.loc),x.code,rnd(x.qty)]);
+const ws=XLSX.utils.aoa_to_sheet([['櫃位','條碼','數量']].concat(rows));
+rows.forEach((r,i)=>{ws[XLSX.utils.encode_cell({r:i+1,c:0})]={t:'s',v:String(r[0])};ws[XLSX.utils.encode_cell({r:i+1,c:1})]={t:'s',v:String(r[1])}});
+ws['!cols']=[{wch:14},{wch:22},{wch:10}];
+const m=new Map();sorted().forEach(x=>{const o=m.get(x.code)||{q:0,l:[]};o.q=rnd(o.q+(x.qty||0));o.l.push(LN(x.loc)+'×'+rnd(x.qty));m.set(x.code,o)});
+const r2=[...m].map(([c,o])=>[c,o.q,o.l.join('、')]);
+const ws2=XLSX.utils.aoa_to_sheet([['條碼','總數量','各櫃位']].concat(r2));
+r2.forEach((r,i)=>{ws2[XLSX.utils.encode_cell({r:i+1,c:0})]={t:'s',v:String(r[0])}});
+ws2['!cols']=[{wch:22},{wch:10},{wch:40}];
+const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'各櫃明細');XLSX.utils.book_append_sheet(wb,ws2,'條碼彙總');
+return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function ready(){if(!S.items.length){toast('還沒有任何資料');return false}if(!window.XLSX){toast('Excel 元件載入失敗，請確認網路後重新整理');return false}return true}
+function exportXlsx(){
+if(!ready())return;
+const blob=buildXlsx();const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='inventory_'+today()+'.xlsx';document.body.appendChild(a);a.click();
+setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);toast('已匯出 Excel');
+}
+async function shareXlsx(){
+if(!ready())return;
+const f=new File([buildXlsx()],'inventory_'+today()+'.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+if(!navigator.canShare||!navigator.canShare({files:[f]})){toast('這支手機不支援直接分享，請用「匯出 Excel」');return}
+try{await navigator.share({files:[f],title:'盤點 '+today()});close()}catch(e){}
+}
+
+shell();renderHead();renderList();
+})();
+</script></body></html>
