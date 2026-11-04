@@ -94,7 +94,8 @@ textarea{width:100%;min-height:160px;border:1px solid var(--line);border-radius:
 .cpcode{font-family:ui-monospace,Menlo,monospace;font-size:22px;overflow-wrap:anywhere}
 .cpq{display:flex;align-items:center;justify-content:center;gap:16px;margin:8px 0 4px}
 .cpq button{width:52px;height:52px;border-radius:12px;border:1px solid var(--line);background:var(--bg);font-size:24px}
-.cpq b{font-size:30px;min-width:60px}
+.cpq input{width:120px;height:56px;text-align:center;font-size:30px;font-weight:700;border:2px solid var(--acc);border-radius:12px;background:#fff;color:var(--ink);padding:0}
+.cpq input:focus{outline:none;box-shadow:0 0 0 3px var(--acc2)}
 .cpsub{font-size:12px;color:var(--acc)}
 .undo{display:flex;align-items:center;gap:8px;margin:10px 16px 0;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;font-size:13px;color:var(--mute)}
 .undo[hidden]{display:none}
@@ -123,6 +124,8 @@ try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.items))S
 S.loc=S.loc||'';S.locs=S.locs||[];S.hist=S.hist||[];S.items.forEach(x=>{if(x.loc==null)x.loc=''});
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 let last=null,scanning=false,gun=false,gunT=null,actx=null;
+const desk=(()=>{try{return matchMedia('(pointer:fine)').matches&&!matchMedia('(pointer:coarse)').matches}catch(e){return false}})();
+let kb='',kbT=null,kbLast=0;
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const rnd=n=>Math.round(n*1000)/1000;
 const num=v=>{if(v===''||v==null)return null;const n=parseFloat(String(v).replace(/,/g,''));return isFinite(n)?n:null};
@@ -160,7 +163,7 @@ $('#app').innerHTML=`
 <input type="file" id="cam" accept="image/*" capture="environment" hidden><input type="file" id="imp" accept=".xlsx,.xls,.csv" hidden>
 <div class="camv" id="camv"><video id="vid" playsinline muted autoplay></video><div class="mask"><div class="win" id="win"><i></i></div></div>
 <div class="camtop"><button class="cbtn" id="cx">完成</button><span id="cloc"></span><button class="cbtn" id="cmode"></button><button class="cbtn" id="torch" hidden>手電筒</button></div>
-<div class="campanel" id="cp"><div class="cphint" id="cph">把條碼橫放在框內，對準就會自動記錄</div><div class="cpres" id="cpr" hidden><div class="cpcode" id="cpc"></div><div class="cpq"><button data-cq="-1">−</button><b id="cpn"></b><button data-cq="1">+</button></div><div class="cpsub" id="cps"></div></div><div class="crow"><button class="cundo" id="cundo" hidden>復原這筆</button><button class="cnext" id="cnext" hidden>掃下一個</button></div></div></div>
+<div class="campanel" id="cp"><div class="cphint" id="cph">把條碼橫放在框內，對準就會自動記錄</div><div class="cpres" id="cpr" hidden><div class="cpcode" id="cpc"></div><div class="cpq"><button data-cq="-1">−</button><input id="cpn" type="text" inputmode="numeric" enterkeyhint="done" autocomplete="off"><button data-cq="1">+</button></div><div class="cpsub" id="cps"></div></div><div class="crow"><button class="cundo" id="cundo" hidden>復原這筆</button><button class="cnext" id="cnext" hidden>掃下一個</button></div></div></div>
 <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div><div class="toast" id="toast"></div>`;
 $('#warn').addEventListener('click',e=>{if(e.target.closest('[data-x]'))exportXlsx()});
 $('#undob').onclick=()=>{undo();if(gun)focusGun()};
@@ -175,6 +178,8 @@ si.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key==='Tab'){e.preventDe
 si.addEventListener('input',()=>{clearTimeout(gunT);gunT=setTimeout(commitGun,300)});
 si.addEventListener('focus',()=>gunState(true));
 si.addEventListener('blur',()=>gunState(false));
+$('#gun').hidden=desk;
+if(desk)$('#mc').placeholder='手動輸入條碼（掃描槍直接掃即可）';
 $('#mf').onsubmit=e=>{e.preventDefault();const c=$('#mc').value.trim();if(!c)return;$('#mc').value='';const x=add(c);toast(c+' 數量 '+x.qty)};
 $('#ov').addEventListener('click',e=>{if(e.target.id==='ov')close()});
 $('#list').addEventListener('click',onListClick);
@@ -183,10 +188,15 @@ $('#list').addEventListener('focusin',e=>{if(e.target.dataset.act==='in')e.targe
 $('#cx').onclick=closeCam;
 $('#torch').onclick=toggleTorch;
 $('#cmode').onclick=()=>{mode=mode==='single'?'cont':'single';try{localStorage.setItem('inv-scan-mode',mode)}catch(e){}armed=true;lastCode='';drawMode();toast(mode==='single'?'單次模式：每掃一個要按「掃下一個」':'連續模式：對準就自動記錄')};
-$('#cnext').onclick=()=>{armed=true;lastCode='';drawMode()};
+$('#cnext').onclick=()=>{$('#cpn').blur();armed=true;lastCode='';drawMode()};
 $('#cundo').onclick=()=>{const h=undo();if(!h)return;$('#cundo').hidden=true;lastCode=h.code;lastAt=Date.now();lastAny=Date.now();const x=S.items.find(y=>y.loc===h.loc&&y.code===h.code);if(mode==='single'){armed=false;if(x){camItem=x;showCamItem(x,false)}else{camItem=null;$('#cpr').hidden=true;$('#cph').hidden=false;$('#cph').textContent='已復原，按「掃下一個」繼續'}$('#cps').textContent='已復原這筆'}else{camItem=null;$('#cpr').hidden=true;$('#cph').hidden=false}drawMode()};
 $('#vid').addEventListener('click',()=>{if(!armed){armed=true;lastCode='';drawMode()}});
-$('#cp').addEventListener('click',e=>{const b=e.target.closest('[data-cq]');if(!b||!camItem)return;camItem.qty=Math.max(0,rnd((camItem.qty||0)+(+b.dataset.cq)));touch();renderList();showCamItem(camItem,false)});
+$('#cp').addEventListener('click',e=>{const b=e.target.closest('[data-cq]');if(!b||!camItem)return;camItem.qty=Math.max(0,rnd((camItem.qty||0)+(+b.dataset.cq)));$('#cpn').value=camItem.qty;touch();renderList();showCamItem(camItem,false)});
+const cpn=$('#cpn');
+cpn.addEventListener('focus',()=>setTimeout(()=>cpn.select(),0));
+cpn.addEventListener('input',()=>{if(!camItem)return;const v=cpn.value.replace(/[^\d.]/g,'');if(v!==cpn.value)cpn.value=v;camItem.qty=num(v)||0;touch();renderList();$('#cps').textContent='已修改數量'});
+cpn.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();cpn.blur()}});
+cpn.addEventListener('blur',()=>{if(camItem)cpn.value=rnd(camItem.qty)});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&stream)closeCam()});
 }
 
@@ -197,7 +207,7 @@ $('#n2').textContent=rnd(h.reduce((a,x)=>a+(x.qty||0),0));
 $('#locn').textContent=LN(S.loc);$('#loc').classList.toggle('none',!S.loc);
 const nl=new Set(S.items.map(x=>x.loc)).size,tq=rnd(S.items.reduce((a,x)=>a+(x.qty||0),0));
 const lh=S.hist[S.hist.length-1];
-$('#undo').hidden=!lh;if(lh)$('#undot').textContent='上一筆：['+LN(lh.loc)+'] '+lh.code+' +1';
+$('#undo').hidden=!lh;if(lh)$('#undot').textContent='上一筆：['+LN(lh.loc)+'] '+lh.code;
 $('#sub').textContent='全部 '+nl+' 櫃 · '+tq+' 件 · '+(S.lastExp?'上次匯出 '+tm(S.lastExp):'尚未匯出過');
 let w='';
 if(!canSave)w+='<div class="wbox red"><b>無法儲存到這支手機！</b>可能是無痕模式或儲存空間已滿。關掉網頁資料就會消失，請馬上匯出 Excel，並改用一般模式開啟。<button data-x>立即匯出</button></div>';
@@ -213,22 +223,22 @@ return `<div class="item${x.code===last?' hl':''}" data-c="${esc(x.code)}"><div 
 
 function renderList(){
 const v=here().sort((a,b)=>(b.t||0)-(a.t||0));
-$('#list').innerHTML=v.length?v.map(itemHTML).join(''):`<div class="empty">${S.loc?'「'+esc(S.loc)+'」還沒有資料':'請先點上方「切換」設定目前櫃位'}<br>按「相機掃描」對準條碼就會自動記錄<br>同一個條碼再掃一次，數量會 +1</div>`;
+$('#list').innerHTML=v.length?v.map(itemHTML).join(''):`<div class="empty">${S.loc?'「'+esc(S.loc)+'」還沒有資料':'請先點上方「切換」設定目前櫃位'}<br>${desk?'接上掃描槍直接掃，不用按任何按鈕':'按「相機掃描」對準條碼就會自動記錄'}<br>同一個條碼再掃一次，數量會 +1</div>`;
 }
 
 function add(c){
 let x=find(c);const isNew=!x;
 if(isNew){x={code:c,loc:S.loc,qty:0};S.items.push(x)}
-x.qty=rnd((x.qty||0)+1);x.t=Date.now();x._new=isNew;last=c;
-S.hist.push({loc:S.loc,code:c,n:isNew?1:0});if(S.hist.length>100)S.hist.shift();
+const pq=x.qty||0;x.qty=rnd(pq+1);x.t=Date.now();x._new=isNew;last=c;
+S.hist.push({loc:S.loc,code:c,n:isNew?1:0,p:pq});if(S.hist.length>100)S.hist.shift();
 touch();renderList();
 return x;
 }
 function undo(){
 const h=S.hist.pop();if(!h){toast('沒有可以復原的掃描');return null}
 const x=S.items.find(y=>y.loc===h.loc&&y.code===h.code);
-if(x){x.qty=Math.max(0,rnd((x.qty||0)-1));if(h.n&&x.qty<=0)S.items=S.items.filter(y=>y!==x)}
-last=null;touch();renderList();toast('已復原：['+LN(h.loc)+'] '+h.code+' −1');
+if(x){x.qty=h.p!=null?h.p:Math.max(0,rnd((x.qty||0)-1));if(h.n&&x.qty<=0)S.items=S.items.filter(y=>y!==x)}
+last=null;touch();renderList();toast('已復原：['+LN(h.loc)+'] '+h.code+(h.p!=null?' 回到 '+h.p:' −1'));
 return h;
 }
 
@@ -236,16 +246,31 @@ function setGun(on){
 gun=on;$('#gun').classList.toggle('on',on);$('#sc').hidden=!on;$('#mf').hidden=on;
 if(on){audio();focusGun()}else $('#si').blur();
 }
-function focusGun(){const i=$('#si');i.value='';i.focus({preventScroll:true})}
-function gunState(f){if(!gun)return;$('#sc').classList.toggle('on',f);$('#sct').textContent=f?'掃描槍模式：直接掃描即可':'已暫停，點這裡繼續掃描';$('#scs').textContent=f?'每掃一次自動記錄，同一條碼數量 +1':'點了其他地方會暫停接收掃描'}
+function focusGun(){if(desk){const a=document.activeElement;if(a&&a!==document.body&&a.blur)a.blur();gunState(true);return}const i=$('#si');i.value='';i.focus({preventScroll:true})}
+function gunState(f){if(!gun)return;if(desk)f=true;$('#sc').classList.toggle('on',f);$('#sct').textContent=f?'掃描槍模式：直接掃描即可':'已暫停，點這裡繼續掃描';$('#scs').textContent=f?'每掃一次自動記錄，同一條碼數量 +1':'點了其他地方會暫停接收掃描'}
 function commitGun(){
 clearTimeout(gunT);const i=$('#si');const c=i.value.replace(/[\r\n\t]/g,'').trim();i.value='';if(!c)return;
-if(!okCode(c)){$('#scl').textContent='已略過非數字條碼';beep(600);return}
+gunHit(c);
+}
+function gunHit(c){
+if(!okCode(c)){if(gun)$('#scl').textContent='已略過非數字條碼';else toast('已略過非數字條碼');beep(600);return}
 const x=add(c);
-$('#scl').textContent='['+LN(S.loc)+'] '+c+'　'+(x._new?'新增 ':'')+'數量 '+x.qty;
-const sc=$('#sc');sc.classList.remove('flash');void sc.offsetWidth;sc.classList.add('flash');
+const msg='['+LN(S.loc)+'] '+c+'　'+(x._new?'新增 ':'')+'數量 '+x.qty;
+if(gun){$('#scl').textContent=msg;const sc=$('#sc');sc.classList.remove('flash');void sc.offsetWidth;sc.classList.add('flash')}else toast(msg);
 beep();buzz();
 }
+function kbCommit(){clearTimeout(kbT);const c=kb;kb='';if(c.length>=6)gunHit(c)}
+document.addEventListener('keydown',e=>{
+const t=e.target;
+if(t&&(t.id==='si'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable||(t.tagName==='INPUT'&&!['button','submit','checkbox','radio','file'].includes(t.type))))return;
+if(e.ctrlKey||e.altKey||e.metaKey)return;
+if($('#ov').classList.contains('show')||stream)return;
+let ch=null;
+if(/^\d$/.test(e.key))ch=e.key;else{const m=/^(?:Digit|Numpad)(\d)$/.exec(e.code||'');if(m&&!e.shiftKey)ch=m[1]}
+const now=performance.now();
+if(ch!==null){audio();if(now-kbLast>120)kb='';kb+=ch;kbLast=now;e.preventDefault();clearTimeout(kbT);kbT=setTimeout(kbCommit,250);return}
+if((e.key==='Enter'||e.key==='Tab'||e.code==='Enter'||e.code==='NumpadEnter')&&kb){e.preventDefault();kbCommit()}
+},true);
 
 let stream=null,det=null,zr=null,camItem=null,lastCode='',lastAt=0,lastAny=0,torchOn=false,ticking=false,armed=true;
 const COOL=2500;
@@ -299,7 +324,7 @@ if(code)onCamCode(String(code).trim());
 setTimeout(tick,det?90:140);
 }
 function onCamCode(c){
-if(!c||!okCode(c)||!armed)return;
+if(!c||!okCode(c)||!armed||document.activeElement===$('#cpn'))return;
 const now=Date.now();
 if(c===lastCode&&now-lastAt<COOL){lastAt=now;return}
 if(now-lastAny<1200)return;
@@ -312,8 +337,8 @@ showCamItem(x,true);$('#cundo').hidden=false;drawMode();
 }
 function showCamItem(x,fresh){
 $('#cph').hidden=true;$('#cpr').hidden=false;
-$('#cpc').textContent=x.code;$('#cpn').textContent=rnd(x.qty);
-$('#cps').textContent=fresh?((x._new?'新條碼，已加入':'數量 +1')+(mode==='single'?' · 按「掃下一個」繼續':' · 同一個要再 +1：移開再對準')):'已修改數量';
+$('#cpc').textContent=x.code;if(document.activeElement!==$('#cpn'))$('#cpn').value=rnd(x.qty);
+$('#cps').textContent=fresh?((x._new?'新條碼，已加入':'數量 +1')+' · 點數字可直接輸入數量'):'已修改數量';
 }
 
 async function decodeImage(file){
