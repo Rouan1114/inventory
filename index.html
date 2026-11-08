@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#f6f4ef"><meta name="apple-mobile-web-app-capable" content="yes"><title>盤點小幫手</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
 <style>
 :root{--bg:#f6f4ef;--card:#fff;--ink:#22201c;--mute:#7a756c;--line:#e6e1d6;--acc:#2f6f5e;--acc2:#e8f1ee;--warn:#b5532f}
@@ -477,24 +477,51 @@ let armed=false;$('#m_clr').onclick=()=>{if(!armed){armed=true;$('#m_clr').textC
 }
 
 function sorted(){const L=allLocs();return S.items.slice().sort((a,b)=>(L.indexOf(a.loc)-L.indexOf(b.loc))||((a.t||0)-(b.t||0)))}
+const xesc=v=>String(v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,'');
+const crcT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc=b=>{let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=crcT[(c^b[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0};
+function zipBlob(files){
+const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+files.forEach(f=>{
+const nm=enc.encode(f.name),d=enc.encode(f.data),c=crc(d);
+const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint32(14,c,true);h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,nm.length,true);
+parts.push(new Uint8Array(h.buffer),nm,d);
+const e=new DataView(new ArrayBuffer(46));e.setUint32(0,0x02014b50,true);e.setUint16(4,20,true);e.setUint16(6,20,true);e.setUint16(8,0x0800,true);e.setUint32(16,c,true);e.setUint32(20,d.length,true);e.setUint32(24,d.length,true);e.setUint16(28,nm.length,true);e.setUint32(42,off,true);
+cen.push(new Uint8Array(e.buffer),nm);off+=30+nm.length+d.length;
+});
+const cs=cen.reduce((a,b)=>a+b.length,0);
+const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,files.length,true);z.setUint16(10,files.length,true);z.setUint32(12,cs,true);z.setUint32(16,off,true);
+return new Blob(parts.concat(cen,[new Uint8Array(z.buffer)]),{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
 function buildXlsx(){
 const ds=S.cdate||today(),wh='I01';
 const [yy,mm,dd]=ds.split('-').map(Number);
 const serial=(Date.UTC(yy,mm-1,dd)-Date.UTC(1899,11,30))/86400000;
-const ws={};const E=XLSX.utils.encode_cell;
-const Y={fill:{patternType:'solid',fgColor:{rgb:'FFFF00'}}};
-['盤點日期','倉庫代號','商品代號','實盤量','櫃號'].forEach((h,c)=>{ws[E({r:0,c})]={t:'s',v:h,s:{alignment:{horizontal:'center'}}}});
-let r=1,prev=null;
+const sheetName=String(mm).padStart(2,'0')+String(dd).padStart(2,'0');
+const L='ABCDE';
+const str=(c,r,v,st)=>'<c r="'+c+r+'" t="inlineStr"'+(st?' s="'+st+'"':'')+'><is><t xml:space="preserve">'+xesc(v)+'</t></is></c>';
+const n=(c,r,v,st)=>'<c r="'+c+r+'"'+(st?' s="'+st+'"':'')+'><v>'+v+'</v></c>';
+let rows='<row r="1">'+['盤點日期','倉庫代號','商品代號','實盤量','櫃號'].map((h,i)=>str(L[i],1,h,1)).join('')+'</row>';
+let r=2,prev=null;
 sorted().forEach(x=>{
-if(x.loc!==prev){if(prev!==null){for(let c=0;c<5;c++)ws[E({r,c})]={t:'s',v:'',s:Y};r++}ws[E({r,c:0})]={t:'n',v:serial,z:'mm-dd-yy'};if(wh)ws[E({r,c:1})]={t:'s',v:wh};if(x.loc)ws[E({r,c:4})]={t:'s',v:x.loc};prev=x.loc}
-ws[E({r,c:2})]={t:'s',v:String(x.code),z:'0'};ws[E({r,c:3})]={t:'n',v:rnd(x.qty)};r++;
+if(x.loc!==prev){
+if(prev!==null){rows+='<row r="'+r+'" s="4" customFormat="1">'+[0,1,2,3,4].map(i=>'<c r="'+L[i]+r+'" s="4"/>').join('')+'</row>';r++}
+rows+='<row r="'+r+'">'+n('A',r,serial,2)+str('B',r,wh)+str('C',r,x.code,3)+n('D',r,rnd(x.qty))+(x.loc?str('E',r,x.loc):'')+'</row>';prev=x.loc;
+}else rows+='<row r="'+r+'">'+str('C',r,x.code,3)+n('D',r,rnd(x.qty))+'</row>';
+r++;
 });
-ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(r-1,0),c:4}});
-ws['!cols']=[{wch:13},{wch:9},{wch:21.7},{wch:13.3},{wch:9}];
-const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,String(mm).padStart(2,'0')+String(dd).padStart(2,'0'));
-return new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+const sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:E'+Math.max(r-1,1)+'"/><cols><col min="1" max="1" width="13" customWidth="1"/><col min="2" max="2" width="9" customWidth="1"/><col min="3" max="3" width="21.66" customWidth="1"/><col min="4" max="4" width="13.33" customWidth="1"/><col min="5" max="5" width="9" customWidth="1"/></cols><sheetData>'+rows+'</sheetData></worksheet>';
+const styles='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="yyyy/m/d"/></numFmts><fonts count="1"><font><sz val="12"/><name val="Arial"/><family val="2"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+return zipBlob([
+{name:'[Content_Types].xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'},
+{name:'_rels/.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
+{name:'xl/workbook.xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="'+sheetName+'" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+{name:'xl/_rels/workbook.xml.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'},
+{name:'xl/styles.xml',data:styles},
+{name:'xl/worksheets/sheet1.xml',data:sheet}
+]);
 }
-function ready(){if(!S.items.length){toast('還沒有任何資料');return false}if(!window.XLSX){toast('Excel 元件載入失敗，請確認網路後重新整理');return false}return true}
+function ready(){if(!S.items.length){toast('還沒有任何資料');return false}return true}
 function askName(btn,cb){
 const def=(S.fname||'盤點')+'_'+today();
 open(`<h2>匯出設定</h2><div class="f"><label class="hint">檔名（不用打 .xlsx）</label><input id="fn" value="${esc(def)}" autocomplete="off"></div>
