@@ -98,6 +98,8 @@ textarea{width:100%;min-height:160px;border:1px solid var(--line);border-radius:
 .cpq input{width:120px;height:56px;text-align:center;font-size:30px;font-weight:700;border:2px solid var(--acc);border-radius:12px;background:#fff;color:var(--ink);padding:0}
 .cpq input:focus{outline:none;box-shadow:0 0 0 3px var(--acc2)}
 .cpsub{font-size:12px;color:var(--acc)}
+.gq{display:inline-block;margin:2px 0 4px;padding:5px 12px;border:1px solid var(--acc);border-radius:999px;color:var(--acc);background:#fff;font-size:13px;text-decoration:none}
+.gq[hidden]{display:none}
 .cpname{font-size:15px;font-weight:600;color:var(--ink);margin-bottom:2px;overflow-wrap:anywhere;min-height:1em}
 .bc .nm{display:block;font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;font-size:13px;color:var(--ink);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sc .lname{font-size:14px;color:var(--ink);margin-top:2px;min-height:18px}
@@ -168,7 +170,7 @@ $('#app').innerHTML=`
 <input type="file" id="cam" accept="image/*" capture="environment" hidden><input type="file" id="imp" accept=".xlsx,.xls,.csv" hidden><input type="file" id="impn" accept=".xlsx,.xls,.csv" hidden>
 <div class="camv" id="camv"><video id="vid" playsinline muted autoplay></video><div class="mask"><div class="win" id="win"><i></i></div></div>
 <div class="camtop"><button class="cbtn" id="cx">完成</button><span id="cloc"></span><button class="cbtn" id="torch" hidden>手電筒</button></div>
-<div class="campanel" id="cp"><div class="cphint" id="cph">把條碼橫放在框內，對準就會自動記錄</div><div class="cpres" id="cpr" hidden><div class="cpname" id="cpnm"></div><div class="cpcode" id="cpc"></div><div class="cpq"><button data-cq="-1">−</button><input id="cpn" type="text" inputmode="numeric" enterkeyhint="done" autocomplete="off"><button data-cq="1">+</button></div><div class="cpsub" id="cps"></div></div><div class="crow"><button class="cundo" id="cundo" hidden>復原這筆</button><button class="cnext" id="cnext" hidden>掃下一個</button></div></div></div>
+<div class="campanel" id="cp"><div class="cphint" id="cph">把條碼橫放在框內，對準就會自動記錄</div><div class="cpres" id="cpr" hidden><div class="cpname" id="cpnm"></div><a class="gq" id="cpgq" target="_blank" rel="noopener" hidden>上網查這是什麼</a><div class="cpcode" id="cpc"></div><div class="cpq"><button data-cq="-1">−</button><input id="cpn" type="text" inputmode="numeric" enterkeyhint="done" autocomplete="off"><button data-cq="1">+</button></div><div class="cpsub" id="cps"></div></div><div class="crow"><button class="cundo" id="cundo" hidden>復原這筆</button><button class="cnext" id="cnext" hidden>掃下一個</button></div></div></div>
 <div class="ov" id="ov"><div class="sheet" id="sheet"></div></div><div class="toast" id="toast"></div>`;
 $('#warn').addEventListener('click',e=>{if(e.target.closest('[data-x]'))exportXlsx()});
 $('#undob').onclick=()=>{undo();if(gun)focusGun()};
@@ -243,9 +245,11 @@ pend.delete(code);
 if(!t){miss.add(code);showName(code);return}
 S.names[code]=t.trim();persist();renderList();showName(code);
 }
+function gUrl(c){return 'https://www.google.com/search?q='+encodeURIComponent(c)}
+function camName(code){const t=S.names[code]||'',p=pend.has(code);$('#cpnm').textContent=t||(p?'查詢書名中…':'');const a=$('#cpgq');a.hidden=!!t||p;a.href=gUrl(code)}
 function showName(code){
 const t=S.names[code]||'';
-if(camItem&&camItem.code===code)$('#cpnm').textContent=t||(pend.has(code)?'查詢書名中…':'');
+if(camItem&&camItem.code===code)camName(code);
 if(gun&&$('#scl').textContent.includes(code))$('#scn').textContent=t;
 if(!gun&&t&&last===code&&$('#toast').classList.contains('show'))toast($('#toast').textContent.split('\n')[0]+'\n'+t);
 }
@@ -361,7 +365,7 @@ showCamItem(x,true);$('#cundo').hidden=false;drawMode();
 }
 function showCamItem(x,fresh){
 $('#cph').hidden=true;$('#cpr').hidden=false;
-$('#cpc').textContent=x.code;$('#cpnm').textContent=S.names[x.code]||(pend.has(x.code)?'查詢書名中…':'');if(document.activeElement!==$('#cpn'))$('#cpn').value=rnd(x.qty);
+$('#cpc').textContent=x.code;camName(x.code);if(document.activeElement!==$('#cpn'))$('#cpn').value=rnd(x.qty);
 $('#cps').textContent=fresh?((x._new?'新條碼，已加入':'數量 +1')+' · 點數字可直接輸入數量'):'已修改數量';
 }
 
@@ -394,7 +398,8 @@ const x=find(e.target.closest('.item').dataset.c);
 x.qty=num(e.target.value)||0;touch();
 }
 function openQty(x){
-open(`<h2>修改數量</h2><div class="code">${esc(x.code)}</div>${S.names[x.code]?'<div class="tag" style="color:var(--ink);font-weight:600">'+esc(S.names[x.code])+'</div>':''}<div class="tag">櫃位 ${esc(LN(x.loc))}</div>
+open(`<h2>修改數量</h2><div class="code">${esc(x.code)}</div><div class="tag">櫃位 ${esc(LN(x.loc))}</div>
+<div class="f"><label class="hint">品名（只顯示在畫面上，不會匯出）</label><div style="display:flex;gap:8px;align-items:center"><input id="q_nm" value="${esc(S.names[x.code]||'')}" placeholder="可貼上查到的名稱" autocomplete="off" style="flex:1;min-width:0"><a class="gq" href="${gUrl(x.code)}" target="_blank" rel="noopener">上網查</a></div></div>
 <div class="qty"><button data-q="-1">−</button><input id="q_in" inputmode="decimal" value="${rnd(x.qty)}"><button data-q="1">+</button></div>
 <div class="acts"><button class="btn dng" id="q_del">刪除</button><button class="btn pri" id="q_ok">完成</button></div>`);
 const inp=$('#q_in');
@@ -402,6 +407,7 @@ const upd=()=>{touch();const el=[...$('#list').querySelectorAll('.item')].find(e
 $('#sheet').querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{x.qty=Math.max(0,rnd((x.qty||0)+(+b.dataset.q)));inp.value=x.qty;upd()});
 inp.oninput=()=>{x.qty=num(inp.value)||0;upd()};
 inp.onfocus=()=>inp.select();
+$('#q_nm').oninput=e=>{const v=e.target.value.trim();if(v)S.names[x.code]=v;else delete S.names[x.code];persist();const el=[...$('#list').querySelectorAll('.item')].find(e=>e.dataset.c===x.code);if(el){const nm=el.querySelector('.nm');if(nm)nm.textContent=v;else if(v)renderList()}};
 $('#q_ok').onclick=close;
 let armed=false;$('#q_del').onclick=()=>{if(!armed){armed=true;$('#q_del').textContent='確定刪除？';return}S.items=S.items.filter(y=>y!==x);touch();close();renderList()};
 }
